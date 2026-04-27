@@ -1,0 +1,1659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build Tetris with A.I. — Year 3 + 4</title>
+
+<!-- Fonts: Outfit — Split Pastel preset -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   THEME — Split Pastel (peach + lavender, kid-friendly)
+   ============================================================ */
+:root {
+  --bg-peach:    #f5e6dc;
+  --bg-lavender: #e4dff0;
+  --bg-cream:    #faf6f0;
+  --text-dark:   #1a1a1a;
+  --text-mute:   #555;
+  --text-soft:   #888;
+  --badge-mint:   #c8f0d8;
+  --badge-yellow: #f0e0a8;
+  --badge-pink:   #f0d4e0;
+  --badge-blue:   #c8dff0;
+  --accent-deep:  #6b4f9a;
+  --accent-pink:  #d4778f;
+  --accent-mint:  #6aa886;
+  --accent-rgb:   107, 79, 154;
+
+  --font-display: 'Outfit', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  --font-scale: 1;
+  /* All sizes bumped 30% from baseline for Y3-Y4 readability */
+  --title-size:    calc(clamp(3.1rem, 9.75vw, 7.8rem) * var(--font-scale));
+  --h2-size:       calc(clamp(1.95rem, 4.94vw, 3.9rem) * var(--font-scale));
+  --h3-size:       calc(clamp(1.37rem, 2.86vw, 2.08rem) * var(--font-scale));
+  --body-size:     calc(clamp(1.17rem, 2.08vw, 1.56rem) * var(--font-scale));
+  --small-size:    calc(clamp(1.01rem, 1.56vw, 1.24rem) * var(--font-scale));
+  --label-size:    calc(clamp(0.85rem, 1.24vw, 1.04rem) * var(--font-scale));
+
+  --slide-padding: clamp(1.2rem, 3vw, 2.5rem);
+  --gap:           clamp(1rem, 2vw, 2rem);
+  --gap-sm:        clamp(0.5rem, 1.2vw, 1rem);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration:      0.65s;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow-x: hidden; }
+body {
+  background: var(--bg-cream);
+  color: var(--text-dark);
+  font-family: var(--font-display);
+  font-weight: 500;
+  overflow: hidden;
+}
+
+.slides-container { position: relative; width: 100vw; height: 100vh; height: 100dvh; }
+.slide {
+  position: absolute; inset: 0;
+  width: 100vw; height: 100vh; height: 100dvh;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(20px);
+  pointer-events: none;
+  transition: opacity 0.5s var(--ease-out-expo), transform 0.5s var(--ease-out-expo);
+}
+.slide.active { opacity: 1; transform: translateY(0); pointer-events: auto; z-index: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.2s !important; }
+}
+
+/* ============================================================
+   AIS LOGO — top-right on every slide
+   ============================================================ */
+.ais-logo {
+  position: absolute;
+  top: clamp(0.6rem, 1.5vh, 1.2rem);
+  right: clamp(0.6rem, 1.5vw, 1.2rem);
+  height: clamp(28px, 4.5vh, 48px);
+  z-index: 5;
+  background: rgba(255,255,255,0.9);
+  border-radius: 6px;
+  padding: 0.15em 0.4em;
+}
+.slide.title-slide .ais-logo,
+.slide.closing-slide .ais-logo {
+  height: clamp(32px, 5.5vh, 56px);
+}
+
+/* ============================================================
+   STAGGERED REVEAL
+   ============================================================ */
+.reveal {
+  opacity: 0; transform: translateY(26px);
+  transition: opacity var(--duration) var(--ease-out-expo), transform var(--duration) var(--ease-out-expo);
+}
+.slide.active .reveal { opacity: 1; transform: translateY(0); }
+.reveal-left {
+  opacity: 0; transform: translateX(-26px);
+  transition: opacity var(--duration) var(--ease-out-expo), transform var(--duration) var(--ease-out-expo);
+}
+.slide.active .reveal-left { opacity: 1; transform: translateX(0); }
+.reveal-scale {
+  opacity: 0; transform: scale(0.96);
+  transition: opacity var(--duration) var(--ease-out-expo), transform var(--duration) var(--ease-out-expo);
+}
+.slide.active .reveal-scale { opacity: 1; transform: scale(1); }
+.d1 { transition-delay: 0.05s; }
+.d2 { transition-delay: 0.18s; }
+.d3 { transition-delay: 0.32s; }
+.d4 { transition-delay: 0.45s; }
+.d5 { transition-delay: 0.58s; }
+.d6 { transition-delay: 0.7s; }
+
+/* ============================================================
+   TITLE SLIDE — Split Pastel signature
+   ============================================================ */
+.title-slide { padding: 0; flex-direction: row; display: flex; }
+.title-left {
+  flex: 1.05;
+  background: var(--bg-peach);
+  padding: clamp(1.5rem, 4vw, 4rem);
+  display: flex; flex-direction: column; justify-content: center;
+  position: relative;
+}
+.title-right {
+  flex: 1;
+  background: var(--bg-lavender);
+  padding: clamp(1.5rem, 4vw, 4rem);
+  display: flex; flex-direction: column; justify-content: center; gap: var(--gap-sm);
+  background-image:
+    linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.title-eyebrow {
+  font-size: var(--small-size);
+  font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+  margin-bottom: var(--gap-sm);
+  color: var(--accent-deep);
+}
+.title-main {
+  font-size: var(--title-size);
+  font-weight: 800; line-height: 0.96; letter-spacing: -0.02em;
+  margin-bottom: var(--gap-sm);
+  color: var(--text-dark);
+}
+.title-sub {
+  font-size: clamp(1rem, 1.8vw, 1.3rem);
+  font-weight: 500; opacity: 0.7;
+}
+.badges { display: flex; flex-wrap: wrap; gap: 0.6em; margin-top: var(--gap-sm); }
+.badge {
+  display: inline-flex; align-items: center; gap: 0.4em;
+  padding: 0.5em 1em; border-radius: 999px;
+  font-size: var(--small-size); font-weight: 700;
+}
+.badge.mint   { background: var(--badge-mint); }
+.badge.yellow { background: var(--badge-yellow); }
+.badge.pink   { background: var(--badge-pink); }
+.badge.blue   { background: var(--badge-blue); }
+.title-tagline {
+  font-size: clamp(1.1rem, 2.2vw, 1.7rem);
+  font-weight: 700; line-height: 1.3;
+}
+.title-cta {
+  align-self: flex-start;
+  background: var(--text-dark); color: var(--bg-peach);
+  padding: 0.65em 1.3em; border-radius: 999px;
+  font-family: var(--font-display); font-weight: 700;
+  font-size: var(--small-size);
+  border: none; cursor: pointer;
+  margin-top: var(--gap-sm);
+}
+
+/* ============================================================
+   CONTENT SLIDES — cream with peach/lavender accents
+   ============================================================ */
+.content-slide {
+  background: var(--bg-cream);
+  padding: var(--slide-padding);
+  display: flex;
+}
+.content-card {
+  flex: 1;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  max-height: 100%;
+  gap: var(--gap-sm);
+  padding: clamp(0.8rem, 2vw, 2rem) clamp(1rem, 2.5vw, 2.5rem);
+}
+
+.eyebrow {
+  font-weight: 700; font-size: var(--small-size);
+  letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--accent-deep);
+}
+.eyebrow .num {
+  font-family: var(--font-mono); font-weight: 700;
+  color: var(--text-soft); margin-right: 0.8em; letter-spacing: 0.05em;
+}
+.slide-title {
+  font-weight: 800; font-size: var(--h2-size);
+  line-height: 1.05; letter-spacing: -0.02em; color: var(--text-dark);
+}
+.slide-subtitle {
+  font-weight: 500; font-size: var(--h3-size);
+  color: var(--accent-deep); line-height: 1.25;
+}
+.body-text {
+  font-weight: 500; font-size: var(--body-size);
+  color: var(--text-mute); line-height: 1.5; max-width: 75ch;
+}
+.body-text strong { color: var(--accent-deep); font-weight: 700; }
+.accent-bar {
+  width: clamp(50px, 7vw, 110px);
+  height: 4px;
+  background: var(--accent-deep);
+  border-radius: 2px;
+  margin: 0.3em 0 0.5em;
+}
+
+/* ============================================================
+   PEDAGOGICAL BADGES — I Do / We Do / You Do
+   ============================================================ */
+.ped-badge {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--small-size);
+  letter-spacing: 0.18em;
+  padding: 0.45em 1em;
+  border-radius: 999px;
+  text-transform: uppercase;
+  align-self: flex-start;
+}
+.ped-badge.i-do  { background: var(--badge-yellow); color: #6b5400; }
+.ped-badge.we-do { background: var(--badge-mint);   color: #1f5e3a; }
+.ped-badge.you-do{ background: var(--badge-pink);   color: #6b1f44; }
+
+/* ============================================================
+   WALT — rounded cards (one per intention), 25% larger text
+   ============================================================ */
+.walt-cards { display: flex; flex-direction: column; gap: var(--gap-sm); margin-top: var(--gap-sm); }
+.walt-card {
+  background: var(--bg-peach);
+  border-radius: clamp(14px, 2vw, 22px);
+  padding: clamp(1rem, 2vw, 1.6rem) clamp(1.3rem, 2.5vw, 2.2rem);
+  border: 2px solid rgba(0,0,0,0.07);
+  position: relative;
+  display: flex; align-items: center; gap: clamp(0.7rem, 1.5vw, 1.2rem);
+}
+.walt-card:nth-child(2) { background: var(--bg-lavender); }
+.walt-card:nth-child(3) { background: var(--badge-mint); }
+.walt-num {
+  flex: 0 0 auto;
+  font-family: var(--font-mono); font-weight: 800;
+  font-size: calc(var(--h3-size) * 1.1);
+  color: var(--accent-deep);
+  width: 1.6em; text-align: center;
+  border-right: 2px solid rgba(0,0,0,0.1);
+  padding-right: clamp(0.6rem, 1.2vw, 1rem);
+}
+.walt-card:nth-child(2) .walt-num { color: var(--accent-mint); }
+.walt-card:nth-child(3) .walt-num { color: #1f5e3a; }
+.walt-card p {
+  font-size: calc(var(--body-size) * 1.25);  /* 25% larger than current body */
+  font-weight: 600;
+  color: var(--text-dark);
+  line-height: 1.4;
+  margin: 0;
+}
+.walt-card p em {
+  color: var(--accent-deep);
+  font-style: italic;
+  font-weight: 800;
+}
+.walt-card:nth-child(2) p em { color: #1f5e3a; }
+.walt-card:nth-child(3) p em { color: var(--accent-pink); }
+
+/* ============================================================
+   FRAGMENT REVEALS — for delayed in-slide reveals on next press
+   ============================================================ */
+[data-fragment] {
+  opacity: 0;
+  transform: translateY(15px);
+  transition: opacity 0.4s var(--ease-out-expo), transform 0.4s var(--ease-out-expo);
+  pointer-events: none;
+}
+[data-fragment].fragment-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* ============================================================
+   SUCCESS CRITERIA — tiered star cards
+   ============================================================ */
+.star-grid { display: flex; flex-direction: column; gap: var(--gap-sm); }
+.star-card {
+  background: var(--bg-peach);
+  border-radius: clamp(12px, 1.5vw, 18px);
+  padding: clamp(0.8rem, 1.5vw, 1.3rem) clamp(1rem, 2vw, 1.6rem);
+  border-left: 4px solid var(--accent-deep);
+}
+.star-card.s2 { background: var(--bg-lavender); border-left-color: var(--accent-mint); }
+.star-card.s3 { background: var(--badge-pink);  border-left-color: var(--accent-pink); }
+.star-label {
+  font-weight: 800; font-size: var(--small-size);
+  letter-spacing: 0.15em; text-transform: uppercase;
+  color: var(--accent-deep); display: block; margin-bottom: 0.3em;
+}
+.star-card.s2 .star-label { color: var(--accent-mint); }
+.star-card.s3 .star-label { color: var(--accent-pink); }
+.star-desc {
+  font-size: var(--body-size);
+  color: var(--text-dark); line-height: 1.4;
+}
+.star-desc em { color: var(--accent-deep); font-style: italic; font-weight: 700; }
+
+/* ============================================================
+   HOOK LAYOUT (slide 2) — image is the hero, text below
+   ============================================================ */
+.hook-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  margin-top: var(--gap-sm);
+}
+.hook-img-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+}
+.hook-img-wrap img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0,0,0,0.25);
+  border: 2px solid rgba(0,0,0,0.08);
+}
+.hook-caption {
+  font-size: var(--body-size);
+  font-weight: 600;
+  color: var(--text-mute);
+  text-align: center;
+}
+
+/* ============================================================
+   TWO-COLUMN
+   ============================================================ */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+  flex: 1;
+  min-height: 0;
+  margin-top: var(--gap-sm);
+  align-items: center;
+}
+.col { display: flex; flex-direction: column; gap: var(--gap-sm); min-height: 0; justify-content: center; }
+.slide-img {
+  max-width: 100%;
+  max-height: min(62vh, 500px);
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  border: 2px solid rgba(0,0,0,0.06);
+}
+
+/* ============================================================
+   STEP CARDS
+   ============================================================ */
+.step-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: var(--gap-sm);
+  margin-top: var(--gap-sm);
+}
+.step-card {
+  background: var(--bg-peach);
+  border-radius: clamp(12px, 1.5vw, 18px);
+  padding: clamp(0.8rem, 1.5vw, 1.3rem);
+  display: flex; flex-direction: column; gap: 0.4em;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+.step-card.alt { background: var(--bg-lavender); }
+.step-num {
+  font-family: var(--font-mono); font-weight: 700;
+  font-size: var(--h3-size); color: var(--accent-deep);
+}
+.step-title {
+  font-weight: 800; font-size: var(--h3-size);
+  color: var(--text-dark); letter-spacing: -0.01em;
+}
+.step-body {
+  font-weight: 500; font-size: var(--small-size);
+  color: var(--text-mute); line-height: 1.4;
+}
+.step-body strong { color: var(--accent-deep); }
+.step-body code {
+  font-family: var(--font-mono); background: rgba(0,0,0,0.06);
+  padding: 0.1em 0.4em; border-radius: 4px;
+  color: var(--accent-deep); font-weight: 700;
+}
+
+/* ============================================================
+   CALLOUT
+   ============================================================ */
+.callout {
+  background: var(--badge-yellow);
+  border-radius: clamp(12px, 1.5vw, 18px);
+  padding: clamp(0.7rem, 1.4vw, 1.1rem) clamp(1rem, 2vw, 1.5rem);
+  font-size: var(--small-size); line-height: 1.5;
+  margin-top: auto;
+  color: #6b5400;
+  font-weight: 600;
+}
+.callout strong { color: #4a3a00; font-weight: 800; }
+
+/* ============================================================
+   PROMPT COMPARE (slide 5)
+   ============================================================ */
+.prompt-compare {
+  display: grid;
+  grid-template-columns: 0.32fr 0.68fr;
+  gap: var(--gap);
+  flex: 1; min-height: 0;
+  margin-top: var(--gap-sm);
+}
+.prompt-box {
+  border-radius: clamp(12px, 1.5vw, 18px);
+  padding: clamp(0.8rem, 1.5vw, 1.3rem);
+  display: flex; flex-direction: column; gap: 0.3em;
+  overflow: hidden;
+  border: 2px solid;
+}
+.prompt-box.bad   { background: #f7d7d2; border-color: #b8584a; }
+.prompt-box.good  { background: #d2ecdb; border-color: var(--accent-mint); }
+.prompt-label {
+  font-family: var(--font-display); font-weight: 800;
+  font-size: var(--small-size); letter-spacing: 0.15em; text-transform: uppercase;
+}
+.prompt-box.bad  .prompt-label { color: #b8584a; }
+.prompt-box.good .prompt-label { color: #1f5e3a; }
+.prompt-box .x { font-size: 1.5em; line-height: 1; }
+.prompt-text {
+  font-family: var(--font-mono);
+  font-size: clamp(0.7rem, 1.05vw, 0.85rem);
+  color: var(--text-dark);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.4em 0.2em;
+}
+.prompt-text.big {
+  font-size: clamp(1.4rem, 3vw, 2.2rem);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  display: flex; align-items: center; justify-content: center;
+  text-align: center;
+  flex: 1;
+}
+.prompt-tag {
+  display: inline-block;
+  background: rgba(0,0,0,0.08);
+  padding: 0.2em 0.6em; border-radius: 4px;
+  font-family: var(--font-mono); font-size: 0.85em;
+  color: var(--accent-deep); font-weight: 700;
+}
+
+/* ============================================================
+   WORKFLOW STEPS (slide 6) — visual flow
+   ============================================================ */
+.workflow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--gap-sm);
+  flex: 1;
+  margin-top: var(--gap-sm);
+  min-height: 0;
+}
+.workflow-step {
+  background: var(--bg-peach);
+  border-radius: clamp(12px, 1.5vw, 18px);
+  padding: clamp(0.8rem, 1.5vw, 1.3rem);
+  display: flex; flex-direction: column; gap: 0.5em;
+  position: relative;
+  border: 1px solid rgba(0,0,0,0.05);
+  text-align: center;
+}
+.workflow-step:nth-child(2) { background: var(--bg-lavender); }
+.workflow-step:nth-child(3) { background: var(--badge-mint); }
+.workflow-step:nth-child(4) { background: var(--badge-pink); }
+.workflow-icon {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+}
+.workflow-num {
+  font-family: var(--font-mono); font-weight: 700;
+  font-size: var(--small-size); color: var(--accent-deep);
+  letter-spacing: 0.1em;
+}
+.workflow-title {
+  font-weight: 800; font-size: var(--h3-size);
+  color: var(--text-dark); line-height: 1.15;
+}
+.workflow-body {
+  font-weight: 500; font-size: var(--small-size);
+  color: var(--text-mute); line-height: 1.35;
+}
+
+/* ============================================================
+   SETTINGS CALLOUT (Canvas + Pro mode)
+   ============================================================ */
+.settings-callout {
+  background: var(--badge-blue);
+  border-radius: clamp(12px, 1.5vw, 18px);
+  padding: clamp(0.8rem, 1.5vw, 1.3rem) clamp(1rem, 2vw, 1.6rem);
+  display: flex; gap: 1em; align-items: center;
+  border: 2px solid #6a90c4;
+  margin-top: var(--gap-sm);
+}
+.settings-callout-icon { font-size: clamp(1.6rem, 3vw, 2.4rem); }
+.settings-callout-text {
+  font-weight: 700; font-size: var(--body-size);
+  color: #1f3864;
+  line-height: 1.3;
+}
+.settings-callout-text code {
+  background: rgba(255,255,255,0.6);
+  padding: 0.1em 0.4em; border-radius: 4px;
+  font-family: var(--font-mono); font-weight: 800;
+  color: #6b1f44;
+}
+
+/* ============================================================
+   MISSION CARDS (You Do)
+   ============================================================ */
+.mission-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--gap-sm);
+  flex: 1;
+  margin-top: var(--gap-sm);
+  min-height: 0;
+}
+.mission-card {
+  background: var(--bg-cream);
+  border-radius: clamp(12px, 1.5vw, 18px);
+  padding: clamp(0.8rem, 1.5vw, 1.3rem);
+  display: flex; flex-direction: column; gap: 0.4em;
+  border: 2px solid rgba(0,0,0,0.06);
+}
+.mission-card.m1 { border-color: var(--accent-deep); }
+.mission-card.m2 { border-color: var(--accent-mint); }
+.mission-card.m3 { border-color: var(--accent-pink); }
+.mission-stage {
+  font-family: var(--font-mono); font-weight: 700;
+  font-size: var(--small-size); letter-spacing: 0.1em;
+}
+.mission-card.m1 .mission-stage { color: var(--accent-deep); }
+.mission-card.m2 .mission-stage { color: var(--accent-mint); }
+.mission-card.m3 .mission-stage { color: var(--accent-pink); }
+.mission-title {
+  font-weight: 800; font-size: var(--h3-size);
+  color: var(--text-dark);
+}
+.mission-body {
+  font-weight: 500; font-size: var(--small-size);
+  color: var(--text-mute); line-height: 1.4;
+}
+.mission-time {
+  margin-top: auto;
+  font-family: var(--font-mono); font-size: var(--label-size);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-soft); font-weight: 700;
+}
+
+/* ============================================================
+   EXIT TICKET
+   ============================================================ */
+.exit-question {
+  background: var(--bg-lavender);
+  border-radius: clamp(14px, 2vw, 22px);
+  padding: clamp(1.2rem, 3vw, 2.5rem) clamp(1.5rem, 3.5vw, 3rem);
+  text-align: center;
+  font-weight: 700;
+  font-size: clamp(1.4rem, 3vw, 2.2rem);
+  color: var(--text-dark);
+  line-height: 1.3;
+  flex: 1;
+  display: flex; flex-direction: column; justify-content: center;
+  margin-top: var(--gap-sm);
+}
+.exit-question em { color: var(--accent-deep); font-style: italic; }
+
+/* ============================================================
+   CLOSING SLIDE
+   ============================================================ */
+.closing-slide { padding: 0; flex-direction: row; display: flex; }
+.closing-left {
+  flex: 1;
+  background: var(--bg-peach);
+  padding: clamp(1.5rem, 4vw, 4rem);
+  display: flex; flex-direction: column; justify-content: center;
+}
+.closing-right {
+  flex: 1;
+  background: var(--accent-deep);
+  color: var(--bg-cream);
+  padding: clamp(1.5rem, 4vw, 4rem);
+  display: flex; flex-direction: column; justify-content: center; gap: var(--gap-sm);
+}
+.closing-main {
+  font-weight: 800;
+  font-size: calc(clamp(2.8rem, 9vw, 7rem) * var(--font-scale));
+  line-height: 0.9; letter-spacing: -0.03em;
+  color: var(--text-dark);
+}
+.closing-sub {
+  font-weight: 500; font-size: clamp(1rem, 1.8vw, 1.3rem);
+  color: var(--text-mute); margin-top: var(--gap-sm);
+}
+.closing-tagline {
+  font-weight: 700; font-size: clamp(1.2rem, 2.4vw, 1.8rem);
+  line-height: 1.3;
+}
+.closing-meta {
+  font-family: var(--font-mono); font-size: var(--small-size);
+  letter-spacing: 0.2em; text-transform: uppercase; opacity: 0.8;
+}
+
+/* ============================================================
+   PROGRESS BAR + NAV DOTS + COUNTER
+   ============================================================ */
+.progress-bar-wrap {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 3px;
+  background: rgba(0,0,0,0.08);
+  z-index: 100;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent-deep);
+  width: 0%;
+  transition: width 0.4s var(--ease-out-expo);
+}
+.nav-dots {
+  position: fixed;
+  right: clamp(0.6rem, 1.4vw, 1.2rem);
+  top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 0.55em;
+  z-index: 200;
+}
+.nav-dots button {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent-deep);
+  background: transparent;
+  cursor: pointer; padding: 0;
+  transition: all 0.25s ease;
+}
+.nav-dots button:hover { background: rgba(var(--accent-rgb), 0.4); }
+.nav-dots button.active { background: var(--accent-deep); transform: scale(1.4); }
+.slide-counter {
+  position: fixed;
+  bottom: clamp(0.8rem, 2vh, 1.5rem);
+  right: clamp(1rem, 2.5vw, 2rem);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: var(--small-size);
+  color: var(--accent-deep);
+  letter-spacing: 0.12em;
+  z-index: 200;
+}
+
+/* ============================================================
+   FONT SCALE + FULLSCREEN PILL — bottom-left
+   ============================================================ */
+.font-scale-ctrl {
+  position: fixed;
+  bottom: clamp(0.8rem, 2vh, 1.5rem);
+  left: clamp(1rem, 2.5vw, 2rem);
+  display: flex; align-items: center; gap: 2px;
+  z-index: 1000;
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-radius: 8px;
+  padding: 0.28em 0.45em;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.font-scale-ctrl button {
+  background: none; border: none;
+  color: var(--text-mute);
+  font-family: var(--font-display);
+  font-size: clamp(0.6rem, 0.85vw, 0.72rem);
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0.2em 0.45em;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+.font-scale-ctrl button:hover { color: var(--accent-deep); background: rgba(var(--accent-rgb), 0.1); }
+.font-scale-ctrl button:active { transform: scale(0.92); }
+.font-scale-ctrl button:disabled { opacity: 0.3; cursor: default; }
+#fontScaleLabel {
+  font-weight: 700;
+  font-size: clamp(0.55rem, 0.8vw, 0.68rem);
+  color: var(--text-mute);
+  min-width: 2.8em;
+  text-align: center;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+.font-scale-ctrl .ctrl-divider {
+  width: 1px; height: 1em;
+  background: rgba(var(--accent-rgb), 0.3);
+  margin: 0 4px;
+}
+.font-scale-ctrl .fs-btn {
+  font-size: clamp(0.7rem, 1vw, 0.85rem);
+  padding: 0.15em 0.4em;
+}
+.teacher-btn.off { opacity: 0.4; text-decoration: line-through; }
+
+/* ============================================================
+   CURSOR EFFECTS CANVAS
+   ============================================================ */
+#cursorFx {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ============================================================
+   SPEAKER NOTES PANEL — N key
+   ============================================================ */
+.speaker-notes-panel {
+  position: fixed;
+  bottom: clamp(0.8rem, 2vh, 1.5rem);
+  left: 50%;
+  transform: translateX(-50%) translateY(150%);
+  width: min(900px, 90vw);
+  max-height: 38vh;
+  z-index: 9000;
+  background: rgba(26, 26, 46, 0.97);
+  color: var(--bg-cream);
+  padding: clamp(0.8rem, 1.5vw, 1.2rem) clamp(1rem, 2vw, 1.5rem);
+  border-radius: 12px;
+  box-shadow: 0 -10px 40px rgba(0,0,0,0.35);
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
+  font-size: var(--small-size);
+  line-height: 1.55;
+  overflow-y: auto;
+  transition: transform 0.35s var(--ease-out-expo);
+}
+.speaker-notes-panel.visible { transform: translateX(-50%) translateY(0); }
+.notes-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 0.55em;
+  padding-bottom: 0.45em;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.notes-label {
+  font-weight: 800; font-size: var(--label-size);
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--badge-pink);
+}
+.notes-counter {
+  font-size: var(--label-size);
+  opacity: 0.55; letter-spacing: 0.08em;
+}
+.notes-body { color: var(--bg-cream); }
+.notes-body strong { color: var(--badge-pink); }
+.notes-body em { color: var(--badge-mint); font-style: italic; }
+.notes-body .tag {
+  display: inline-block;
+  background: rgba(var(--accent-rgb), 0.5);
+  color: var(--bg-cream);
+  padding: 0.1em 0.5em; border-radius: 4px;
+  font-size: 0.85em; font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-right: 0.4em;
+}
+.notes-body .tag.cfu { background: var(--accent-pink); }
+.notes-body .tag.tt  { background: var(--accent-mint); }
+.notes-hint {
+  position: fixed;
+  bottom: clamp(0.8rem, 2vh, 1.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: var(--label-size);
+  color: var(--text-soft);
+  letter-spacing: 0.12em; text-transform: uppercase;
+  z-index: 199;
+  background: rgba(255,255,255,0.95);
+  padding: 0.3em 0.8em; border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.06);
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* ============================================================
+   INLINE EDITING
+   ============================================================ */
+.edit-hotzone {
+  position: fixed; top: 0; left: 0;
+  width: 80px; height: 80px;
+  z-index: 10000;
+  cursor: pointer;
+}
+.edit-toggle {
+  position: fixed;
+  top: clamp(0.8rem, 2vh, 1.5rem); left: clamp(1rem, 2.5vw, 2rem);
+  z-index: 10001;
+  background: rgba(255,255,255,0.95);
+  color: var(--accent-deep);
+  border: 1.5px solid var(--accent-deep);
+  border-radius: 50%;
+  width: 44px; height: 44px;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.edit-toggle.show, .edit-toggle.active { opacity: 1; pointer-events: auto; }
+.edit-toggle.active { background: var(--accent-deep); color: white; }
+.edit-banner {
+  position: fixed;
+  top: clamp(0.8rem, 2vh, 1.5rem);
+  left: 50%; transform: translateX(-50%);
+  z-index: 10001;
+  background: var(--accent-deep); color: white;
+  font-family: var(--font-display);
+  font-weight: 700; font-size: var(--small-size);
+  padding: 0.5em 1.2em;
+  border-radius: 999px;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.edit-banner.active { opacity: 1; }
+body.edit-active [contenteditable="true"] {
+  outline: 1.5px dashed rgba(var(--accent-rgb), 0.5);
+  outline-offset: 4px;
+  cursor: text;
+}
+body.edit-active [contenteditable="true"]:focus {
+  outline: 2px solid var(--accent-deep);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+/* ============================================================
+   RESPONSIVE IMAGE HIDING (mandatory CSS pattern)
+   ============================================================ */
+@media (max-width: 900px) {
+  .slide .col:has(.slide-img), .slide .slide-img { display: none; }
+  .slide .two-col { grid-template-columns: 1fr; }
+  .workflow { grid-template-columns: 1fr 1fr; }
+  .mission-grid { grid-template-columns: 1fr; }
+}
+@media (max-height: 620px) {
+  .slide .col:has(.slide-img), .slide .slide-img { display: none; }
+}
+body.scaled-up .slide .col:has(.slide-img),
+body.scaled-up .slide .slide-img { display: none; }
+
+@media (max-height: 700px) {
+  :root {
+    --slide-padding: clamp(0.8rem, 2vw, 1.6rem);
+    --gap: clamp(0.7rem, 1.5vw, 1.2rem);
+  }
+}
+@media (max-height: 600px) {
+  :root {
+    --title-size: calc(clamp(1.8rem, 5.5vw, 3.5rem) * var(--font-scale));
+    --h2-size: calc(clamp(1.1rem, 3vw, 2rem) * var(--font-scale));
+  }
+  .nav-dots { display: none; }
+}
+
+/* Hide elements when teacher toggle off */
+body.hide-teacher [data-teacher-only="true"] { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Progress bar -->
+<div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill"></div></div>
+
+<!-- Nav dots — built by JS -->
+<nav class="nav-dots" id="navDots" aria-label="Slide navigation"></nav>
+
+<!-- Slide counter -->
+<div class="slide-counter" id="slideCounter">1 / 10</div>
+
+<!-- Cursor effects canvas -->
+<canvas id="cursorFx" aria-hidden="true"></canvas>
+
+<!-- Font scale + fullscreen + teacher toggle -->
+<div class="font-scale-ctrl" id="fontScaleCtrl" aria-label="Display controls">
+  <button id="fontScaleDown" aria-label="Decrease font size" title="Smaller (⌘ ,)">A−</button>
+  <span id="fontScaleLabel">100%</span>
+  <button id="fontScaleUp"   aria-label="Increase font size" title="Larger (⌘ .)">A+</button>
+  <span class="ctrl-divider" aria-hidden="true"></span>
+  <button id="fullscreenBtn" class="fs-btn" aria-label="Enter fullscreen" title="Fullscreen (⌘ F)">⛶</button>
+  <span class="ctrl-divider" aria-hidden="true"></span>
+  <button id="teacherBtn" class="fs-btn teacher-btn" aria-label="Toggle teacher callouts" title="Toggle teacher prompts (⌘⇧ H)">🎓</button>
+</div>
+
+<!-- Inline editing -->
+<div class="edit-hotzone" aria-hidden="true"></div>
+<button class="edit-toggle" id="editToggle" title="Edit mode (E)">✏️</button>
+<div class="edit-banner" id="editBanner">Edit mode — click any text. ⌘S to save</div>
+
+<!-- Speaker notes panel -->
+<aside class="speaker-notes-panel" id="speakerNotes" aria-label="Speaker notes (press N to toggle)">
+  <div class="notes-header">
+    <span class="notes-label">📝 Speaker Notes</span>
+    <span class="notes-counter" id="notesCounter">Slide 1 / 10</span>
+  </div>
+  <div class="notes-body" id="notesBody">(no notes for this slide)</div>
+</aside>
+<div class="notes-hint" id="notesHint">Press N for speaker notes</div>
+
+<div class="slides-container" id="slidesContainer">
+
+  <!-- ============================================================
+       SLIDE 1 — TITLE
+       ============================================================ -->
+  <section class="slide title-slide active" data-slide="1" aria-label="Title"
+    data-notes="<strong>Opener (30s).</strong> Greet the class. Today is a hook lesson — by the end of 30 minutes every student will have a real Tetris game running on their device. <span class='tag tt'>TT</span> Quick warm-up: 'Has anyone played Tetris before? Show me a thumb up or down.'">
+    <div class="title-left">
+      <img src="assets/ais_header_framed.png" alt="AIS Sharjah" class="ais-logo reveal d1">
+      <span class="title-eyebrow reveal d1">Lesson · Year 3 + 4 · 30 min</span>
+      <h1 class="title-main reveal d2">Build Tetris<br>With A.I.</h1>
+      <p class="title-sub reveal d3">5 minutes. One prompt. A real game.</p>
+    </div>
+    <div class="title-right">
+      <div class="badges reveal d3">
+        <span class="badge mint">🎮 The Game</span>
+        <span class="badge yellow">🤖 The A.I.</span>
+        <span class="badge pink">🧠 The Prompt</span>
+      </div>
+      <p class="title-tagline reveal d4">You write the instructions. The A.I. writes the code. You play your game.</p>
+      <button class="title-cta reveal d5">Let's go →</button>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SLIDE 2 — HOOK ("How long do you think it took?")
+       ============================================================ -->
+  <section class="slide content-slide" data-slide="2" aria-label="Hook"
+    data-notes="<strong>Hook (3 min).</strong> Open the Tetris game on the projector and play one round, fast. Don't explain anything yet. <span class='tag cfu'>CFU Cold Call (TLAC #34)</span> with 5-7s wait time: 'How long do you think it took Mr Igor to build this game?' Take 2-3 estimates. Reveal: <strong>'5 minutes.'</strong> Pause for the reaction. Bridge: 'You're going to do the same thing today. The secret is in the instructions we give the AI.'">
+    <div class="content-card">
+      <img src="assets/ais_header_framed.png" alt="AIS Sharjah" class="ais-logo">
+      <span class="eyebrow reveal d1"><span class="num">HOOK</span></span>
+      <h2 class="slide-title reveal d2">How long did this take Mr Igor to build?</h2>
+      <div class="accent-bar reveal d3"></div>
+
+      <div class="hook-layout">
+        <div class="hook-img-wrap reveal-scale d3">
+          <img src="assets/Tetrisgameplay.jpg" alt="Mr Igor's Tetris game with leaderboard, score, level and game grid">
+        </div>
+        <p class="hook-caption reveal d4">Take a guess. Wait for it.</p>
+        <div class="callout" data-fragment="1">
+          ⏱ <strong>5 minutes.</strong> And you are going to do the same thing today.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SLIDE 3 — WALT
+       ============================================================ -->
+  <section class="slide content-slide" data-slide="3" aria-label="WALT"
+    data-notes="<strong>WALT (1 min).</strong> Read each intention aloud. Highlight the AC9 verbs in <em>italic colour</em> — these tell us what we'll be doing. Don't dwell. Move on quickly. The hook already has them on board.">
+    <div class="content-card">
+      <img src="assets/ais_header_framed.png" alt="AIS Sharjah" class="ais-logo">
+      <span class="eyebrow reveal d1"><span class="num">01</span> WALT</span>
+      <h2 class="slide-title reveal d2">What are we learning today?</h2>
+      <div class="accent-bar reveal d3"></div>
+
+      <div class="walt-cards">
+        <div class="walt-card reveal d3">
+          <span class="walt-num">1</span>
+          <p>We are learning to <em>use</em> Google AI Studio to <em>create</em> a Tetris game from one prompt.</p>
+        </div>
+        <div class="walt-card reveal d4">
+          <span class="walt-num">2</span>
+          <p>We are learning to <em>identify</em> what makes a prompt good or bad by <em>comparing</em> two examples.</p>
+        </div>
+        <div class="walt-card reveal d5">
+          <span class="walt-num">3</span>
+          <p>We are learning to <em>describe</em> how to copy a prompt from Classroom and run it in Gemini.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SLIDE 4 — SUCCESS CRITERIA
+       ============================================================ -->
+  <section class="slide content-slide" data-slide="4" aria-label="Success criteria"
+    data-notes="<strong>Success Criteria (1 min).</strong> Read each tier. Tell students which star they should aim for. <span class='tag tt'>Turn and Talk (TLAC #36)</span> 'Which star are you aiming for today?' 20 seconds. Take 2-3 voices.">
+    <div class="content-card">
+      <img src="assets/ais_header_framed.png" alt="AIS Sharjah" class="ais-logo">
+      <span class="eyebrow reveal d1"><span class="num">02</span> Success Criteria</span>
+      <h2 class="slide-title reveal d2">How will you know you've nailed it?</h2>
+      <div class="accent-bar reveal d3"></div>
+
+      <div class="star-grid">
+        <div class="star-card s1 reveal d3">
+          <span class="star-label">★ Getting Started</span>
+          <p class="star-desc">I can log in to Google Classroom and find today's assignment.</p>
+        </div>
+        <div class="star-card s2 reveal d4">
+          <span class="star-label">★★ Levelling Up</span>
+          <p class="star-desc">I can copy the prompt, paste it into Gemini AI Studio, and run it to make the Tetris game.</p>
+        </div>
+        <div class="star-card s3 reveal d5">
+          <span class="star-label">★★★ Going Further</span>
+          <p class="star-desc">I can <em>identify</em> which prompt was the good one and <em>explain</em> why it gave a better game.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SLIDE 5 — GOOD PROMPT vs BAD PROMPT
+       ============================================================ -->
+  <section class="slide content-slide" data-slide="5" aria-label="Good vs bad prompt"
+    data-notes="<strong>Bad vs Good (1.5 min).</strong> Show side-by-side. Don't run the bad prompt. Just compare visually. <span class='tag cfu'>CFU Cold Call (TLAC #34)</span> 5s wait: 'Why am I not running the bad one?' Take one cold-called answer. Point at the good prompt: 'Look how detailed this is. That detail is what makes the game actually work.'">
+    <div class="content-card">
+      <img src="assets/ais_header_framed.png" alt="AIS Sharjah" class="ais-logo">
+      <span class="eyebrow reveal d1"><span class="num">I DO</span> Good prompt vs Bad prompt</span>
+      <h2 class="slide-title reveal d2">Detail matters.</h2>
+      <div class="accent-bar reveal d3"></div>
+
+      <div class="prompt-compare">
+        <div class="prompt-box bad reveal-left d3">
+          <span class="prompt-label"><span class="x">✗</span> Bad prompt</span>
+          <div class="prompt-text big">Make a picture<br>of a cute cat</div>
+          <span class="prompt-tag">7 words · doesn't even ask for a game</span>
+        </div>
+        <div class="prompt-box good reveal-scale d4">
+          <span class="prompt-label">✓ Good prompt (one-shot)</span>
+          <div class="prompt-text">Role: Act as an expert React, TypeScript, and Tailwind CSS developer. Your task is to build a fully functional, highly polished, and runtime-stable Tetris game in a single shot.
+
+Architecture &amp; Tech Stack:
+Framework: React (Functional components + Hooks).
+Logic: Use custom hooks (useTetris, useGameStats, useInterval) to separate game engine logic from the UI.
+Styling: Tailwind CSS (Utility-first).
+Animation: motion/react for smooth overlays and grid transitions.
+Icons: lucide-react. Constraint: Use Zap for Hard Drop and Layers for Hold (do not use 'Shift' or 'Space' icons as they don't exist).
+
+Data Integrity &amp; Type Safety (CRITICAL):
+Define explicit TypeScript interfaces for Tetromino (shape: number[][], color: string), Position (x, y), and GridCell (filled: boolean, color: string).
+Consistency: Ensure the RANDOM_TETROMINO generator returns a structure that exactly matches the state requirements of activePiece and nextPiece.
+Defensive Coding: Implement null-checks for activePiece in all movement, rotation, and rendering functions to prevent "cannot read property of null" errors.
+
+Layout Structure (CRITICAL CONSTRAINT):
+Container: Centered on screen, dark background (#050505), full height, overflow hidden.
+Grid: STRICT 3-column layout. CRITICAL: The layout MUST NOT stack vertically or wrap on standard screens. The Left and Right columns MUST remain strictly to the left and right of the Center game board at all times. Use a responsive flex or grid layout (e.g., flex-row, grid-cols-[minmax(120px,250px)_auto_minmax(120px,250px)]) that scales down the elements to fit the screen width rather than dropping the side panels below the game.
+Center Column: A 10x20 game board with a glassmorphism border and neon glow.
+Left Column: A "Hold" piece preview box and a "How to Play" panel with keyboard controls.
+Right Column: A "Next" piece preview, Score/Rows/Level displays, and Start/Pause/Restart buttons.
+
+Styling &amp; Theme:
+Theme: Modern dark mode with Cyan accents for highlights.
+Effects: Glassmorphism (backdrop-blur, semi-transparent white borders).
+Overlays: Use AnimatePresence for "Start Game", "Paused", and "Game Over" screens.
+
+Game Mechanics:
+Pieces: 7 standard Tetrominoes with standard colors.
+Controls: Movement (Left/Right), Rotation (Up), Soft Drop (Down), Hard Drop (Space), Hold (Shift).
+Event Handling (CRITICAL): Call e.preventDefault() on all game control keys (Arrow keys, Spacebar, Shift) within the keydown event listener to prevent the browser window from scrolling during active gameplay.
+Engine: Full collision detection (walls, floor, locked pieces), line clearing logic, and a leveling system that increases drop speed every 10 lines.</div>
+          <span class="prompt-tag">~400 words · everything spelled out for the AI</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SLIDE 6 — THE WORKFLOW (4 steps)
+       ============================================================ -->
+  <section class="slide content-slide" data-slide="6" aria-label="The workflow"
+    data-notes="<strong>I Do — Workflow (4-5 min).</strong> Demonstrate live on the projector. Talk through each step slowly. Make sure students see WHERE TOOLS is and WHERE the Pro toggle is. Engineer Efficiency (TLAC #49): the same 4 steps every time, no skipping.">
+    <div class="content-card">
+      <img src="assets/ais_header_framed.png" alt="AIS Sharjah" class="ais-logo">
+      <span class="ped-badge i-do reveal d1">I Do</span>
+      <h2 class="slide-title reveal d2">The 4 Steps</h2>
+      <div class="accent-bar reveal d3"></div>
+
+      <div class="workflow">
+        <div class="workflow-step reveal-scale d3">
+          <span class="workflow-icon">📂</span>
+          <span class="workflow-num">STEP 1</span>
+          <span class="workflow-title">Open Google Classroom</span>
+          <p class="workflow-body">Find the "Build Tetris with AI" assignment.</p>
+        </div>
+        <div class="workflow-step reveal-scale d4">
+          <span class="workflow-icon">📋</span>
+          <span class="workflow-num">STEP 2</span>
+          <span class="workflow-title">Copy the Prompt</span>
+          <p class="workflow-body">Highlight, then Ctrl+C.</p>
+        </div>
+        <div class="workflow-step reveal-scale d5">
+          <span class="workflow-icon">🤖</span>
+          <span class="workflow-num">STEP 3</span>
+          <span class="workflow-title">Open Gemini</span>
+          <p class="workflow-body">Go to <strong>aistudio.google.com</strong></p>
+        </div>
+        <div class="workflow-step reveal-scale d6">
+          <span class="workflow-icon">🚀</span>
+          <span class="workflow-num">STEP 4</span>
+          <span class="workflow-title">Paste &amp; Build</span>
+          <p class="workflow-body">Paste the prompt. Click Build.</p>
+        </div>
+      </div>
+
+      <div class="settings-callout reveal d6">
+        <span class="settings-callout-icon">⚙️</span>
+        <div class="settings-callout-text">Before you click Build: <code>TOOLS → CANVAS</code>, then switch <code>FAST → PRO</code>.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SLIDE 7 — WE DO
+       ============================================================ -->
+  <section class="slide content-slide" data-slide="7" aria-label="We Do"
+    data-notes="<strong>We Do (8 min).</strong> Whole class follows on their devices. Steps 1+2+3 together (3 min). Then Step 4 (Canvas + Pro mode). Then Step 5 (paste + Build). <span class='tag tt'>Turn and Talk (TLAC #36 Building Ratio)</span> while game generates: 'What do you think is happening right now?' Take 2-3 voices.">
+    <div class="content-card">
+      <img src="assets/ais_header_framed.png" alt="AIS Sharjah" class="ais-logo">
+      <span class="ped-badge we-do reveal d1">We Do</span>
+      <h2 class="slide-title reveal d2">Now you do it. Together.</h2>
+      <div class="accent-bar reveal d3"></div>
+
+      <div class="step-grid">
+        <div class="step-card reveal d3">
+          <span class="step-title">Steps 1 + 2 + 3</span>
+          <p class="step-body"><strong>Mr Igor will show you now.</strong> Open Google Classroom, copy the prompt, then open Gemini AI Studio.</p>
+        </div>
+        <div class="step-card alt reveal d4">
+          <span class="step-title">Step 4 ⚙️</span>
+          <p class="step-body">Click <code>TOOLS</code> and pick <strong>CANVAS</strong>. Then switch <code>FAST</code> to <strong>PRO</strong>.</p>
+        </div>
+        <div class="step-card reveal d5">
+          <span class="step-title">Step 5 🚀</span>
+          <p class="step-body">Paste the prompt. Click <strong>Build</strong>.</p>
+        </div>
+        <div class="step-card alt reveal d6">
+          <span class="step-title">Wait + Talk</span>
+          <p class="step-body">While the AI builds, do a <strong>Turn and Talk:</strong> "What do you think is happening right now?"</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SLIDE 8 — YOU DO (Mission Cards)
+       ============================================================ -->
+  <section class="slide content-slide" data-slide="8" aria-label="You Do"
+    data-notes="<strong>You Do (10 min).</strong> Three stages: wait, play, change. <span class='tag cfu'>CFU Show Call (TLAC #13)</span> circulate with clipboard while they wait + play, confirm everyone has a working game. <span class='tag tt'>Turn and Talk (TLAC #36)</span> on stage 3, then cold call 2-3 pairs to share what they would change.">
+    <div class="content-card">
+      <img src="assets/ais_header_framed.png" alt="AIS Sharjah" class="ais-logo">
+      <span class="ped-badge you-do reveal d1">You Do</span>
+      <h2 class="slide-title reveal d2">Wait. Play. Change one thing.</h2>
+      <div class="accent-bar reveal d3"></div>
+
+      <div class="mission-grid">
+        <div class="mission-card m1 reveal d3">
+          <span class="mission-stage">⏳ STAGE 1</span>
+          <span class="mission-title">Wait for the build</span>
+          <p class="mission-body">Wait until you see the Play button or the game appears. If something looks broken, raise your hand.</p>
+        </div>
+        <div class="mission-card m2 reveal d4">
+          <span class="mission-stage">🎮 STAGE 2</span>
+          <span class="mission-title">Play your game</span>
+          <p class="mission-body">Make sure it really works. Do the controls move? Do blocks fall? Do rows clear? If not, raise your hand.</p>
+        </div>
+        <div class="mission-card m3 reveal d5">
+          <span class="mission-stage">🧠 STAGE 3</span>
+          <span class="mission-title">One change</span>
+          <p class="mission-body"><strong>Turn and Talk:</strong> pick ONE thing in the prompt you would change to make YOUR game different.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SLIDE 9 — EXIT TICKET
+       ============================================================ -->
+  <section class="slide content-slide" data-slide="9" aria-label="Exit ticket"
+    data-notes="<strong>Exit Ticket (3 min).</strong> Single question via Google Form, Meet poll, or thumbs vote. One sentence answer. Use this to gauge whether the 'detail equals better output' concept landed.">
+    <div class="content-card">
+      <img src="assets/ais_header_framed.png" alt="AIS Sharjah" class="ais-logo">
+      <span class="eyebrow reveal d1"><span class="num">03</span> Exit Ticket</span>
+      <h2 class="slide-title reveal d2">Before you log off.</h2>
+      <div class="accent-bar reveal d3"></div>
+
+      <div class="exit-question reveal d3">
+        Which prompt was better,<br>the <em>bad</em> one or the <em>good</em> one?<br><br>Why?
+      </div>
+
+      <div class="callout reveal d5" data-teacher-only="true">
+        🎓 <strong>Teacher:</strong> Quick thumbs vote, Google Form, or Meet poll. Looking for "the good one had more detail" or similar reasoning. One sentence is enough.
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SLIDE 10 — CLOSING
+       ============================================================ -->
+  <section class="slide closing-slide" data-slide="10" aria-label="Closing"
+    data-notes="<strong>Share + Closing (1 min).</strong> Pick the most enthusiastic pair to demo their game's first move on the projector. Quick wow moment. Then: 'Next time, you'll give the AI NEW instructions to change YOUR game.' Get them excited for the follow-up.">
+    <div class="closing-left">
+      <img src="assets/ais_header_framed.png" alt="AIS Sharjah" class="ais-logo reveal d1">
+      <h2 class="closing-main reveal d2">You did it.</h2>
+      <p class="closing-sub reveal d3">You used A.I. to build a real Tetris game in 30 minutes.</p>
+    </div>
+    <div class="closing-right">
+      <span class="closing-meta reveal d3">Coming up next time</span>
+      <p class="closing-tagline reveal d4">You'll give the A.I. <strong>new instructions</strong> to change YOUR game.</p>
+      <p class="closing-meta reveal d5" style="margin-top: 1em;">Build Tetris with A.I. · Year 3 + 4 · 2026</p>
+    </div>
+  </section>
+
+</div><!-- /slides-container -->
+
+<script>
+/* ============================================================
+   SLIDE PRESENTATION CONTROLLER
+   ============================================================ */
+class SlidePresentation {
+  constructor() {
+    this.slides = Array.from(document.querySelectorAll('.slide'));
+    this.total = this.slides.length;
+    this.current = 0;
+    this.navDotsContainer = document.getElementById('navDots');
+    this.progressFill = document.getElementById('progressFill');
+    this.slideCounter = document.getElementById('slideCounter');
+    this.buildNavDots();
+    this.update();
+    this.bindKeyboard();
+    this.bindWheel();
+    this.bindTouch();
+  }
+  buildNavDots() {
+    this.navDotsContainer.innerHTML = '';
+    this.slides.forEach((_, i) => {
+      const btn = document.createElement('button');
+      btn.setAttribute('aria-label', `Go to slide ${i + 1}`);
+      btn.addEventListener('click', () => this.goTo(i));
+      this.navDotsContainer.appendChild(btn);
+    });
+  }
+  goTo(i) {
+    if (i < 0 || i >= this.total || i === this.current) return;
+    /* Reset fragment state on the slide we're entering AND leaving */
+    this.slides[this.current].querySelectorAll('[data-fragment]').forEach(f => f.classList.remove('fragment-visible'));
+    this.slides[this.current].classList.remove('active');
+    this.current = i;
+    this.slides[this.current].querySelectorAll('[data-fragment]').forEach(f => f.classList.remove('fragment-visible'));
+    this.slides[this.current].classList.add('active');
+    this.update();
+  }
+
+  /* Get sorted fragments on the current slide */
+  getFragments() {
+    return Array.from(this.slides[this.current].querySelectorAll('[data-fragment]'))
+      .sort((a, b) => parseInt(a.dataset.fragment, 10) - parseInt(b.dataset.fragment, 10));
+  }
+
+  /* Next: reveal next un-shown fragment OR advance slide */
+  next() {
+    const frags = this.getFragments();
+    for (const f of frags) {
+      if (!f.classList.contains('fragment-visible')) {
+        f.classList.add('fragment-visible');
+        return;
+      }
+    }
+    this.goTo(this.current + 1);
+  }
+
+  /* Prev: hide last shown fragment OR go to previous slide */
+  prev() {
+    const frags = this.getFragments();
+    for (let i = frags.length - 1; i >= 0; i--) {
+      if (frags[i].classList.contains('fragment-visible')) {
+        frags[i].classList.remove('fragment-visible');
+        return;
+      }
+    }
+    this.goTo(this.current - 1);
+  }
+
+  /* (No handleNextPress — keyboard uses hold-detection inline,
+     wheel/touch call next() directly since you can't "hold" them.) */
+  update() {
+    this.progressFill.style.width = ((this.current + 1) / this.total * 100) + '%';
+    this.slideCounter.textContent = `${this.current + 1} / ${this.total}`;
+    Array.from(this.navDotsContainer.children).forEach((dot, i) => {
+      dot.classList.toggle('active', i === this.current);
+    });
+  }
+  bindKeyboard() {
+    const NEXT = ['ArrowRight', 'ArrowDown', 'PageDown', ' '];
+    const PREV = ['ArrowLeft', 'ArrowUp', 'PageUp'];
+
+    /* Debounced triple-tap on NEXT key (universal across all clickers).
+       Each press resets a 200ms timer. When the timer fires:
+         - If 3+ presses queued → toggle notes (no slide change)
+         - Else advance the slide that many times (usually just 1)
+       Trade-off: 200ms perceived lag on every advance, in exchange for
+       a flash-free triple-tap-to-show-notes shortcut. */
+    this.TAP_DEBOUNCE_MS = 200;
+    this.tapCount = 0;
+    this.tapTimer = null;
+
+    const flushTaps = () => {
+      const count = this.tapCount;
+      this.tapCount = 0;
+      this.tapTimer = null;
+      if (count >= 3) {
+        if (typeof this.onTripleTap === 'function') this.onTripleTap();
+      } else {
+        for (let i = 0; i < count; i++) this.next();
+      }
+    };
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.isContentEditable || ['INPUT','TEXTAREA','IFRAME'].includes(e.target.tagName)) return;
+      if (NEXT.includes(e.key)) {
+        e.preventDefault();
+        if (e.repeat) return; /* ignore key-repeat from holding */
+        this.tapCount += 1;
+        if (this.tapTimer) clearTimeout(this.tapTimer);
+        this.tapTimer = setTimeout(flushTaps, this.TAP_DEBOUNCE_MS);
+        return;
+      }
+      if (PREV.includes(e.key)) { e.preventDefault(); this.prev(); }
+      if (e.key === 'Home') { e.preventDefault(); this.goTo(0); }
+      if (e.key === 'End')  { e.preventDefault(); this.goTo(this.total - 1); }
+    });
+  }
+  bindWheel() {
+    let cooldown = false;
+    window.addEventListener('wheel', (e) => {
+      if (cooldown) return;
+      if (Math.abs(e.deltaY) < 30) return;
+      cooldown = true;
+      setTimeout(() => cooldown = false, 600);
+      if (e.deltaY > 0) this.next(); else this.prev();
+    }, { passive: true });
+  }
+  bindTouch() {
+    let startY = 0, startX = 0;
+    window.addEventListener('touchstart', (e) => {
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+    }, { passive: true });
+    window.addEventListener('touchend', (e) => {
+      const dy = e.changedTouches[0].clientY - startY;
+      const dx = e.changedTouches[0].clientX - startX;
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 60) {
+        if (dy < 0) this.next(); else this.prev();
+      } else if (Math.abs(dx) > 60) {
+        if (dx < 0) this.next(); else this.prev();
+      }
+    }, { passive: true });
+  }
+}
+
+class FontScaleController {
+  constructor() {
+    this.STEP = 0.1; this.MIN = 0.5; this.MAX = 2.0;
+    this.scale = parseFloat(localStorage.getItem('tetris_fontScale') || '1');
+    this.labelEl = document.getElementById('fontScaleLabel');
+    this.btnUp   = document.getElementById('fontScaleUp');
+    this.btnDown = document.getElementById('fontScaleDown');
+    this.btnUp.addEventListener('click',   () => this.increase());
+    this.btnDown.addEventListener('click', () => this.decrease());
+    document.addEventListener('keydown', (e) => {
+      if (!e.metaKey) return;
+      if (e.key === '.') { e.preventDefault(); this.increase(); }
+      if (e.key === ',') { e.preventDefault(); this.decrease(); }
+    });
+    this.apply();
+  }
+  increase() { this.setScale(this.scale + this.STEP); }
+  decrease() { this.setScale(this.scale - this.STEP); }
+  setScale(v) {
+    this.scale = Math.round(Math.max(this.MIN, Math.min(this.MAX, v)) * 10) / 10;
+    this.apply();
+    localStorage.setItem('tetris_fontScale', this.scale);
+  }
+  apply() {
+    document.documentElement.style.setProperty('--font-scale', this.scale);
+    this.labelEl.textContent = Math.round(this.scale * 100) + '%';
+    this.btnDown.disabled = this.scale <= this.MIN;
+    this.btnUp.disabled   = this.scale >= this.MAX;
+    document.body.classList.toggle('scaled-up', this.scale > 1.2);
+  }
+}
+
+class FullscreenController {
+  constructor() {
+    this.btn = document.getElementById('fullscreenBtn');
+    this.btn.addEventListener('click', () => this.toggle());
+    document.addEventListener('keydown', (e) => {
+      if (e.metaKey && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); this.toggle(); return; }
+      if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const t = e.target;
+        if (t.isContentEditable || ['INPUT','TEXTAREA','IFRAME'].includes(t.tagName)) return;
+        e.preventDefault(); this.toggle();
+      }
+    });
+    document.addEventListener('fullscreenchange', () => this.syncLabel());
+  }
+  toggle() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => {});
+  }
+  syncLabel() {
+    const isFs = !!document.fullscreenElement;
+    this.btn.setAttribute('title', isFs ? 'Exit fullscreen (⌘ F / Esc)' : 'Fullscreen (⌘ F)');
+  }
+}
+
+class TeacherToggle {
+  constructor() {
+    this.btn = document.getElementById('teacherBtn');
+    this.hidden = localStorage.getItem('tetris_hideTeacher') === '1';
+    this.btn.addEventListener('click', () => this.toggle());
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'h' || e.key === 'H')) {
+        e.preventDefault(); this.toggle();
+      }
+    });
+    this.apply();
+  }
+  toggle() { this.hidden = !this.hidden; this.apply(); localStorage.setItem('tetris_hideTeacher', this.hidden ? '1' : '0'); }
+  apply() {
+    document.body.classList.toggle('hide-teacher', this.hidden);
+    this.btn.classList.toggle('off', this.hidden);
+    this.btn.setAttribute('aria-label', this.hidden ? 'Show teacher callouts' : 'Hide teacher callouts');
+  }
+}
+
+class CursorEffects {
+  constructor() {
+    this.canDo = matchMedia('(hover: hover) and (pointer: fine)').matches
+              && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!this.canDo) return;
+    this.canvas = document.getElementById('cursorFx');
+    this.ctx = this.canvas.getContext('2d');
+    /* Theme accent: deep purple #6b4f9a → rgb(107, 79, 154) */
+    this.accentRgba = (a) => `rgba(107, 79, 154, ${a})`;
+    this.trail = []; this.strokes = []; this.current = null;
+    this.TRAIL_LIFE = 400; this.INK_FADE = 1500;
+    this.resize();
+    window.addEventListener('resize', () => this.resize());
+    this.bindEvents();
+    requestAnimationFrame(() => this.tick());
+  }
+  resize() {
+    const dpr = window.devicePixelRatio || 1;
+    this.canvas.width  = innerWidth  * dpr;
+    this.canvas.height = innerHeight * dpr;
+    this.canvas.style.width  = innerWidth  + 'px';
+    this.canvas.style.height = innerHeight + 'px';
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.scale(dpr, dpr);
+  }
+  bindEvents() {
+    window.addEventListener('mousemove', (e) => {
+      this.trail.push({ x: e.clientX, y: e.clientY, t: performance.now() });
+      if (this.current) this.current.points.push({ x: e.clientX, y: e.clientY });
+    });
+    window.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest('button, a, [contenteditable], input, textarea, .nav-dots, .edit-toggle, .edit-hotzone, iframe')) return;
+      this.current = { points: [{ x: e.clientX, y: e.clientY }], done: false };
+      this.strokes.push(this.current);
+    });
+    const endStroke = () => {
+      if (this.current) { this.current.done = true; this.current.finishedAt = performance.now(); this.current = null; }
+    };
+    window.addEventListener('mouseup', endStroke);
+    window.addEventListener('mouseleave', endStroke);
+  }
+  tick() {
+    const now = performance.now();
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    this.trail = this.trail.filter(p => now - p.t < this.TRAIL_LIFE);
+    for (const p of this.trail) {
+      const age = (now - p.t) / this.TRAIL_LIFE;
+      const alpha = 1 - age;
+      const r = 7 * (1 - age * 0.35);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = this.accentRgba(alpha * 0.6);
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = this.accentRgba(0.8);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    for (let i = this.strokes.length - 1; i >= 0; i--) {
+      const s = this.strokes[i];
+      let alpha = 1;
+      if (s.done) {
+        const age = now - s.finishedAt;
+        if (age >= this.INK_FADE) { this.strokes.splice(i, 1); continue; }
+        alpha = 1 - age / this.INK_FADE;
+      }
+      if (s.points.length < 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(s.points[0].x, s.points[0].y);
+      for (let j = 1; j < s.points.length; j++) ctx.lineTo(s.points[j].x, s.points[j].y);
+      ctx.strokeStyle = this.accentRgba(alpha);
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = this.accentRgba(alpha * 0.7);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    requestAnimationFrame(() => this.tick());
+  }
+}
+
+class SpeakerNotesPanel {
+  constructor(presentation) {
+    this.presentation = presentation;
+    this.visible = false;
+    this.panel = document.getElementById('speakerNotes');
+    this.hint  = document.getElementById('notesHint');
+    document.addEventListener('keydown', (e) => {
+      if ((e.key === 'n' || e.key === 'N') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (e.target.isContentEditable || ['INPUT','TEXTAREA','IFRAME'].includes(e.target.tagName)) return;
+        e.preventDefault(); this.toggle();
+      }
+    });
+    const orig = presentation.update.bind(presentation);
+    presentation.update = () => { orig(); this.updateContent(); };
+    this.updateContent();
+  }
+  toggle() {
+    this.visible = !this.visible;
+    this.panel.classList.toggle('visible', this.visible);
+    this.hint.style.display = this.visible ? 'none' : '';
+    this.updateContent();
+  }
+  updateContent() {
+    const slide = this.presentation.slides[this.presentation.current];
+    const notes = slide.dataset.notes || '(no notes for this slide)';
+    this.panel.querySelector('.notes-body').innerHTML = notes;
+    this.panel.querySelector('.notes-counter').textContent = `Slide ${this.presentation.current + 1} / ${this.presentation.total}`;
+  }
+}
+
+class InlineEditor {
+  constructor() {
+    this.isActive = false;
+    this.toggle  = document.getElementById('editToggle');
+    this.banner  = document.getElementById('editBanner');
+    this.hotzone = document.querySelector('.edit-hotzone');
+    this.selector = 'h1, h2, h3, p, li, .step-title, .step-body, .star-desc, .star-label, .mission-title, .mission-body, .body-text, .title-tagline, .closing-tagline, .closing-sub';
+    this.toggle.addEventListener('click', () => this.toggleMode());
+    this.hotzone.addEventListener('click', () => this.toggleMode());
+    let hideT = null;
+    this.hotzone.addEventListener('mouseenter', () => { clearTimeout(hideT); this.toggle.classList.add('show'); });
+    this.hotzone.addEventListener('mouseleave', () => {
+      hideT = setTimeout(() => { if (!this.isActive) this.toggle.classList.remove('show'); }, 400);
+    });
+    this.toggle.addEventListener('mouseenter', () => clearTimeout(hideT));
+    this.toggle.addEventListener('mouseleave', () => {
+      hideT = setTimeout(() => { if (!this.isActive) this.toggle.classList.remove('show'); }, 400);
+    });
+    document.addEventListener('keydown', (e) => {
+      if ((e.key === 'e' || e.key === 'E') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const t = e.target;
+        if (t.isContentEditable || ['INPUT','TEXTAREA','IFRAME'].includes(t.tagName)) return;
+        this.toggleMode();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); if (this.isActive) this.exportFile(); }
+    });
+  }
+  toggleMode() {
+    this.isActive = !this.isActive;
+    document.body.classList.toggle('edit-active', this.isActive);
+    this.toggle.classList.toggle('active', this.isActive);
+    this.banner.classList.toggle('active', this.isActive);
+    this.toggle.textContent = this.isActive ? '✓' : '✏️';
+    document.querySelectorAll(this.selector).forEach(el => {
+      if (this.isActive) el.setAttribute('contenteditable', 'true');
+      else el.removeAttribute('contenteditable');
+    });
+  }
+  exportFile() {
+    const editable = Array.from(document.querySelectorAll('[contenteditable]'));
+    editable.forEach(el => el.removeAttribute('contenteditable'));
+    document.body.classList.remove('edit-active');
+    this.toggle.classList.remove('active', 'show');
+    this.banner.classList.remove('active');
+    const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+    document.body.classList.add('edit-active');
+    editable.forEach(el => el.setAttribute('contenteditable', 'true'));
+    this.toggle.classList.add('active');
+    this.banner.classList.add('active');
+    const blob = new Blob([html], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'Build Tetris with AI - Grade 3+4.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+}
+
+/* Boot */
+const fontScaleCtrl  = new FontScaleController();
+const fullscreenCtrl = new FullscreenController();
+const cursorFx       = new CursorEffects();
+const teacherToggle  = new TeacherToggle();
+const editor         = new InlineEditor();
+const presentation   = new SlidePresentation();
+const speakerNotes   = new SpeakerNotesPanel(presentation);
+/* Wire universal triple-tap on NEXT (3 rapid presses within 200ms each)
+   → toggle speaker notes. Works on every clicker because it only relies on
+   the standard "next" signal being fired three times. */
+presentation.onTripleTap = () => speakerNotes.toggle();
+</script>
+</body>
+</html>
